@@ -1,0 +1,1041 @@
+// Laise Aquino, Nov 2013
+// Created as part of the Object Oriented Programming course
+
+#include <iostream>
+#include <cstring>
+#include <cstdio>
+
+using namespace std;
+
+#define MAX 10  // vector size
+#define SIZE 30 // string size
+
+class Usuario{
+
+    private:
+        char nome[SIZE];
+        int matricula;
+        int tipo_usuario;
+        int max_obras; // Gets max number of items a user can borrow, according to the type
+                       // of user. If it reaches zero, the user can no longer borrow items.
+    public:
+        Usuario();
+        ~Usuario(){;}
+
+        void setNome();
+        void setMatricula();
+        void setTipo();
+
+        char* getNome() {return nome;}
+        int getMatricula() {return matricula;}
+        int getTipo() {return tipo_usuario;}
+        int getMaxObras() {return max_obras;}
+
+        void Imprime();
+        void GravaCadastro(); // saves object in file
+        void AtualizaNome(char* novo_nome) {strcpy(nome, novo_nome);}
+        void AtualizaTipo(int novo_tipo) {tipo_usuario = novo_tipo;}
+        bool VerificaMaxObras(); // verifies if user can borrow items
+        void Emprestar(); // decrements max_obras
+        void Devolver();  // increments max_obras
+};
+
+class Obra{
+
+    private:
+        int codigo;
+        char titulo[SIZE];
+        char autor[SIZE];
+        int n_exemp; // number of copies
+        int tipo_obra;
+
+    public:
+        Obra();
+        ~Obra(){;}
+
+        void setCodigo();
+        void setTitulo();
+        void setAutor();
+        void setNExemplares();
+        void setTipo();
+
+        int getCodigo() {return codigo;}
+        char* getTitulo() {return titulo;}
+        char* getAutor() {return autor;}
+        int getNExemplares() {return n_exemp;}
+        int getTipo() {return tipo_obra;}
+
+        void Imprime();
+        void GravaCadastro(); // saves object in file
+        void AtualizaTitulo(char* novo_titulo) {strcpy(titulo, novo_titulo);}
+        void AtualizaAutor(char* novo_autor) {strcpy(autor, novo_autor);}
+        void AtualizaNExemplares(int novo_n_exemp) {n_exemp = novo_n_exemp;}
+        void AtualizaTipo(int novo_tipo) {tipo_obra = novo_tipo;}
+        bool VerificaExemplares(); // verifies if there are copies of an item available to borrow
+        void Emprestar(); // decrements n_exemp
+        void Devolver();  // increments n_exemp
+};
+
+class Reserva: public Usuario, public Obra{
+
+    private:
+        int dia_emprestimo;
+        int mes_emprestimo;
+        int dia_devolucao;
+        int mes_devolucao;
+        int aux_d_emp; // The return is calculated with these values, which are initiated
+        int aux_m_emp; // with the borrowing's date and updated when an item is renewed.
+
+    public:
+        Reserva();
+        ~Reserva(){;};
+
+        void setDataEmprestimo();
+
+        void CalculaDevolucao(int tipo_usuario); // calculates day and month of the return from the type of user and borrowing date
+        void ImprimeEmprestimo(); // prints date of borrowing formatted as (dd/mm)
+        void ImprimeDevolucao();  // prints date of return formatted as (dd/mm)
+        void Renovar(int tipo_usuario); // establishes a "new borrowing date" for correct calculation of the fine
+        float CalculaMulta(int dia, int mes, int tipo_usuario); // calculates fine from return delay
+};
+
+
+// USER CLASS FUNCTIONS --------------------------------------------------------------------------------
+
+
+Usuario::Usuario(){
+    nome[0] = '\0';
+    matricula = 0;
+    tipo_usuario = 0;
+    max_obras = 0;
+}
+
+void Usuario::setNome(){
+    printf("Username: ");
+    fflush(stdin);
+    fgets(nome, SIZE, stdin);    // As \n is also read from the input, the last
+    nome[strlen(nome)-1] = '\0'; // character of the string has to be removed.
+}
+
+void Usuario::setMatricula(){
+    printf("User ID: ");
+    scanf("%d", &matricula);
+}
+
+void Usuario::setTipo(){
+    printf(" 1 - Undergraduate student\n");
+    printf(" 2 - Graduate student\n");
+    printf(" 3 - Professor\n");
+    printf("User type: ");
+    scanf("%d", &tipo_usuario);
+
+    if(tipo_usuario == 1)
+        max_obras = 4;
+    else if(tipo_usuario == 2)
+        max_obras = 6;
+    else if(tipo_usuario == 3)
+        max_obras = 10;
+    else
+        tipo_usuario = -1; // indicates invalid value
+}
+
+void Usuario::Imprime(){
+    printf("Name: %s\n", getNome());
+    printf("ID: %d\n", getMatricula());
+    printf("Type: %d\n", getTipo());
+}
+
+void Usuario::GravaCadastro(){
+    FILE *arq = fopen ("userlist.bin", "ab"); // data will be added to the end of the file
+    fwrite (this, sizeof(Usuario), 1, arq);
+    fclose(arq);
+}
+
+bool Usuario::VerificaMaxObras(){
+    if(max_obras == 0){
+        printf("\nThis user cannot borrow any more items.\n");
+        return false;
+    }else return true;
+}
+
+void Usuario::Emprestar(){
+    max_obras--;
+}
+
+void Usuario::Devolver(){
+    max_obras++;
+}
+
+
+// WORK CLASS FUNCTIONS --------------------------------------------------------------------------------------
+
+
+Obra::Obra(){
+    codigo = 0;
+    titulo[0] = '\0';
+    autor[0] = '\0';
+}
+
+void Obra::setCodigo(){
+    printf("Item ID: ");
+    scanf("%d", &codigo);
+}
+
+void Obra::setTitulo(){
+    printf("Title: ");
+    fflush(stdin);
+    fgets(titulo, SIZE, stdin); // same as username reading
+    titulo[strlen(titulo)-1] = '\0';
+}
+
+void Obra::setAutor(){
+    printf("Author: ");
+    fflush(stdin);
+    fgets(autor, SIZE, stdin); // same as username reading
+    autor[strlen(autor)-1] = '\0';
+}
+
+void Obra::setNExemplares(){
+    printf("Number of copies: ");
+    scanf("%d", &n_exemp);
+}
+
+void Obra::setTipo(){
+    printf(" 1 - Book\n");
+    printf(" 2 - Periodical\n");
+    printf(" 3 - Thesis\n");
+    printf("Type of item: ");
+    scanf("%d", &tipo_obra);
+
+    if( (tipo_obra < 1) || (tipo_obra > 3) )
+        tipo_obra = -1; // indicates invalid value
+}
+
+void Obra::Imprime(){
+    printf("Title: %s\n", getTitulo());
+    printf("Author: %s\n", getAutor());
+    printf("Item ID: %d\n", getCodigo());
+    printf("Copies: %d\n", getNExemplares());
+    printf("Type: %d\n", getTipo());
+}
+
+void Obra::GravaCadastro(){
+    FILE *arq = fopen ("workslist.bin", "ab");
+    fwrite (this, sizeof(Obra), 1, arq);
+    fclose(arq);
+}
+
+bool Obra::VerificaExemplares(){
+    if(n_exemp > 0)
+        return true;
+    else{
+        printf("\nThere are no copies available for borrowing.\n");
+        return false;
+    }
+}
+
+void Obra::Emprestar(){
+    n_exemp--;
+}
+
+void Obra::Devolver(){
+    n_exemp++;
+}
+
+
+// RESERVATION CLASS FUNCTIONS --------------------------------------------------------------------------------------------
+
+
+Reserva::Reserva(){
+    dia_emprestimo = 0;
+    mes_emprestimo = 0;
+    dia_devolucao = 0;
+    mes_devolucao = 0;
+}
+
+void Reserva::setDataEmprestimo(){
+    printf("Borrowing date (dd/mm): ");
+    scanf("%d/%d", &dia_emprestimo, &mes_emprestimo);
+    aux_d_emp = dia_emprestimo;
+    aux_m_emp = mes_emprestimo;
+}
+
+void Reserva::CalculaDevolucao(int tipo){
+
+    if(tipo == 1){ // undergraduate student
+
+        dia_devolucao = aux_d_emp + 7;
+        if(dia_devolucao > 30){
+            dia_devolucao = dia_devolucao%30; // if it goes beyond day 30, goes to the next month
+            mes_devolucao = aux_m_emp + 1;
+        }
+        else(mes_devolucao = aux_m_emp);
+
+        if(mes_devolucao > 12)
+            mes_devolucao = mes_devolucao%12;
+
+    }
+
+    if(tipo == 2){ // graduate student
+
+        dia_devolucao = aux_d_emp + 10;
+        if(dia_devolucao > 30){
+            dia_devolucao = dia_devolucao%30;
+            mes_devolucao = aux_m_emp + 1;
+        }
+        else(mes_devolucao = aux_m_emp);
+
+        if(mes_devolucao > 12)
+            mes_devolucao = mes_devolucao%12;
+    }
+
+    if(tipo == 3){ // professor
+
+        dia_devolucao = aux_d_emp + 15;
+        if(dia_devolucao > 30){
+            dia_devolucao = dia_devolucao%30;
+            mes_devolucao = aux_m_emp + 1;
+        }
+        else(mes_devolucao = aux_m_emp);
+
+        if(mes_devolucao > 12)
+            mes_devolucao = mes_devolucao%12;
+    }
+}
+
+void Reserva::ImprimeEmprestimo(){ // prints borrowing date with correct formatting
+    if(dia_emprestimo < 10){
+        if(mes_emprestimo < 10)
+            printf("Borrowing date: 0%d/0%d\n", dia_emprestimo, mes_emprestimo);
+        else printf("Borrowing date: 0%d/%d\n", dia_emprestimo, mes_emprestimo);
+    }else if(mes_emprestimo < 10)
+        printf("Borrowing date: %d/0%d\n", dia_emprestimo, mes_emprestimo);
+    else printf("Borrowing date: %d/%d\n", dia_emprestimo, mes_emprestimo);
+}
+
+void Reserva::ImprimeDevolucao(){ // prints return date with correct formatting
+    if(dia_devolucao < 10){
+        if(mes_devolucao < 10)
+            printf("Return date: 0%d/0%d\n", dia_devolucao, mes_devolucao);
+        else printf("Return date: 0%d/%d\n", dia_devolucao, mes_devolucao);
+    }else if(mes_devolucao < 10)
+        printf("Return date: %d/0%d\n", dia_devolucao, mes_devolucao);
+    else printf("Return date: %d/%d\n", dia_devolucao, mes_devolucao);
+}
+
+void Reserva::Renovar(int tipo){
+
+    if(tipo == 1){ // undergraduate student
+
+        aux_d_emp = aux_d_emp + 7; // updates borrowing date without changing the original
+        if(aux_d_emp > 30){
+            aux_d_emp = aux_d_emp%30;
+            aux_m_emp++;
+        }
+
+        if(aux_m_emp > 12)
+            aux_m_emp = aux_m_emp%12;
+    }
+
+    if(tipo == 2){ // graduate student
+
+        aux_d_emp = aux_d_emp + 10;
+        if(aux_d_emp > 30){
+            aux_d_emp = aux_d_emp%30;
+            aux_m_emp++;
+        }
+
+        if(aux_m_emp > 12)
+            aux_m_emp = aux_m_emp%12;
+    }
+
+    if(tipo == 3){ // professor
+
+        aux_d_emp = aux_d_emp + 15;
+        if(aux_d_emp > 30){
+            aux_d_emp = aux_d_emp%30;
+            aux_m_emp++;
+        }
+
+        if(aux_m_emp > 12)
+            aux_m_emp = aux_m_emp%12;
+    }
+}
+
+float Reserva::CalculaMulta(int dia, int mes, int tipo){ // calculates delay fine - must be used after calculating the return
+    int dif;
+    if( (dia > dia_devolucao) || (mes > mes_devolucao) ){
+
+        dif = (mes - mes_devolucao)*30 + (dia - dia_devolucao); // difference in days
+        if(tipo == 1)
+            return (dif*0.7);
+        if(tipo == 2)
+            return dif;
+        if(tipo == 3)
+            return (dif*1.2);
+        else return 0;
+    }
+    else return 0;
+}
+
+
+// MAIN FUNCTION ------------------------------------------------------------------------------------------------------
+
+
+int main(){
+
+    char aux_str[SIZE];
+    int escolha;
+    int u=0; // user control
+    int w=0; // item control
+    int r=0; // reservation control
+    register int i=0, j=-1, k=-1;
+    float multa;
+    int aux_int, dia, mes;
+    char stay = 'y';
+
+    Usuario usuario[MAX];
+    Obra obra[MAX];
+    Reserva reserva[MAX];
+
+    FILE *arq_usuarios, *arq_obras, *arq_reserva;
+    arq_usuarios = fopen ("userlist.bin", "rb");
+    arq_obras = fopen ("workslist.bin", "rb");
+    arq_reserva = fopen ("reservation.bin", "rb");
+
+    // If conditions are satisfied, it means the files were not created yet
+    // Then, files are created and opened for reading (even if they are empty)
+    if ((arq_usuarios == NULL) || (arq_obras == NULL) || (arq_reserva == NULL)){
+        arq_usuarios = fopen ("userlist.bin", "wb"); fclose(arq_usuarios);
+        arq_obras = fopen ("workslist.bin", "wb"); fclose(arq_obras);
+        arq_reserva = fopen ("reservation.bin", "wb"); fclose(arq_reserva);
+
+        arq_usuarios = fopen ("userlist.bin", "rb");
+        arq_obras = fopen ("workslist.bin", "rb");
+        arq_reserva = fopen ("reservation.bin", "rb");
+    }
+
+    // Gettinng users from the user file
+        // Pointer is placed in the end of the file to obtain its total
+        // size and, after, the number of entries it contains.
+        fseek (arq_usuarios, 0, SEEK_END);
+        int filesize = ftell(arq_usuarios);
+        int n_objects = filesize / sizeof(Usuario);
+
+        // Then, the file's entries are read.
+        rewind (arq_usuarios);
+        for(u=0; u<n_objects; u++)
+            fread(&usuario[u], sizeof(Usuario), 1, arq_usuarios);
+        // Following readings from the files apply the same method.
+
+
+    // Getting items from the work file
+        fseek (arq_obras, 0, SEEK_END);
+        filesize = ftell(arq_obras);
+        n_objects = filesize / sizeof(Obra);
+
+        rewind (arq_obras);
+        for(w=0; w<n_objects; w++)
+            fread(&obra[w], sizeof(Obra), 1, arq_obras);
+
+    // Getting reservations from the reservation file
+        fseek (arq_reserva, 0, SEEK_END);
+        filesize = ftell(arq_reserva);
+        n_objects = filesize / sizeof(Reserva);
+
+        rewind (arq_reserva);
+        for(r=0; r<n_objects; r++)
+            fread(&reserva[r], sizeof(Reserva), 1, arq_reserva);
+
+
+    fclose(arq_usuarios);
+    fclose(arq_obras);
+    fclose(arq_reserva);
+
+
+
+// ------------------------------ Main Menu ------------------------------
+
+
+    do{
+        printf("\n");
+        printf("   -Actions Menu-\n\n");
+        printf("1 - Register user\n");
+        printf("2 - Edit user registry\n");
+        printf("3 - Register item\n");
+        printf("4 - Edit item registry\n");
+        printf("5 - Lend\n");
+        printf("6 - Renew\n");
+        printf("7 - Return\n");
+        printf("8 - Print user borrowing list\n");
+        printf("9 - Save borrowing list\n");
+        printf("10 - Save item list\n");
+        printf("11 - Exit system\n");
+
+        scanf("%d", &escolha);
+        printf("\n");
+
+        // User Register -----------------------------------------------------------------------
+
+        if(escolha == 1){
+            printf("Register user\n\n");
+            usuario[u].setMatricula();
+
+            // Verifies if user already exists in the system, searching by their ID
+            // in the vector of registered users.
+            for(i=0; i<u; i++){
+                if(usuario[i].getMatricula() == usuario[u].getMatricula()){
+                    printf("User already registered.\n\n");
+                    j=0; // condition to not register
+                }
+            }
+
+            // If the user is not yer registered, j's initial value
+            // does not change and the register process proceeds.
+            if(j == -1){
+                usuario[u].setNome();
+                do{
+                    usuario[u].setTipo();              // Sets user type to -1 if a value
+                    if(usuario[u].getTipo() == -1)     // different from 1, 2 or 3 is inputted.
+                        printf("Invalid value.\n\n");  // Repeats until input is valid.
+                }while(usuario[u].getTipo() == -1);
+
+                usuario[u].GravaCadastro(); // saves new object in file
+                printf("\nUser registered successfully.\n\n");
+                u++; // increments the number of registered users
+            }
+            // Sets control variable back to default value
+            j=-1;
+        }
+
+        // Editting User Registry -----------------------------------------------------------------------
+
+        if(escolha == 2){
+
+            if(u == 0)
+                printf("No users registered.\n");
+
+            else{
+
+                printf("Edit user registry\n\n");
+
+                do{
+                    printf("Input user ID: ");
+                    scanf("%d", &aux_int);
+
+                    // Verifies if the user exists in the system, searching for their ID
+                    // in the vector of registered users.
+                    for(i=0; i<u; i++){
+                        if(usuario[i].getMatricula() == aux_int){
+                            j = i; // saves vector index for future editting
+                            printf("\n");
+                        }
+                    }
+                    // If the ID is not found, j's initial value is not changed
+                    // and an option to input another ID is shown.
+                    if(j == -1){
+                        printf("\nID not registered.\n");
+                        printf("Input again? (y/n) ");
+                        cin >> stay;
+                        if(stay == 'y') printf("\n");
+                    }
+
+                }while( (j == -1) && (stay == 'y') );
+
+                // The loop repeats until a valid ID is inserted or until
+                // the option to stop is chosen. If the input is aborted
+                // (stay = 'n'), no registry is changed and the program
+                // returns to the main menu. Otherwise, execution continues.
+
+                if(stay == 'y'){
+
+                    usuario[j].Imprime(); // print corresponding user's data
+                    printf("\n");
+
+                    printf("New username: ");
+                    scanf("%s", aux_str);
+                    usuario[j].AtualizaNome(aux_str);
+
+                    do{
+                        printf(" 1 - Undergraduate student\n");
+                        printf(" 2 - Graduate student\n");
+                        printf(" 3 - Professor\n");
+                        printf("New type: ");
+                        scanf("%d", &aux_int);
+
+                        if( (aux_int < 1) || (aux_int > 3) ) // execution continues only if a valid value is typed
+                            printf("Invalid value.\n\n");
+
+                    }while( (aux_int < 1) || (aux_int > 3) );
+
+                    usuario[j].AtualizaTipo(aux_int);
+
+                    printf("\nRegistry updated successfully.\n");
+                }
+            }
+            // Sets control variables back to default value
+            printf("\n");
+            j=-1;
+            stay = 'y';
+        }
+
+        // Item register -----------------------------------------------------------------------
+
+        if(escolha == 3){
+            printf("Register item\n\n");
+            obra[w].setCodigo();
+
+            // Verify if item already exists in the system, searching for
+            // inputted ID in the registered items vector
+            for(i=0; i<w; i++){
+                if(obra[i].getCodigo() == obra[w].getCodigo()){
+                    printf("Item already registered.\n\n");
+                    j=0; // condition to not register
+                }
+            }
+
+            // If the item is not registered yet, j's initial value is not changed
+            // and the registering proceeds.
+            if(j == -1){
+                obra[w].setTitulo();
+                obra[w].setAutor();
+                obra[w].setNExemplares();
+                do{
+                    obra[w].setTipo();                 // Sets user type to -1 if a value
+                    if(obra[w].getTipo() == -1)        // different from 1, 2 or 3 is inputted.
+                        printf("Invalid Value.\n\n");  // Repeats until input is valid.
+                }while(obra[w].getTipo() == -1);
+
+                obra[w].GravaCadastro(); // saves new object in file
+                printf("\nItem registered successfully.\n\n");
+                w++; // increments number of items registered
+            }
+            // Sets control variable back to default value
+            j=-1;
+        }
+
+        // Editting Item Registry -----------------------------------------------------------------------
+
+        if (escolha == 4){
+
+            if(w == 0)
+                printf("No items registered.\n");
+
+            else{
+
+                printf("Edit item registry\n\n");
+
+                do{
+                    printf("Input item ID: ");
+                    scanf("%d", &aux_int);
+
+                    // Verifies if item already exists in the system, searching for
+                    // its ID in the registered items vector.
+                    for(i=0; i<w; i++){
+                        if(obra[i].getCodigo() == aux_int){
+                            j = i; // save vector index for future editting
+                            printf("\n");
+                        }
+                    }
+                    // If the ID is not found, the option to type
+                    // another ID appears.
+                    if(j == -1){
+                        printf("\nID not registered.\n");
+                        printf("Input again? (y/n) ");
+                        cin >> stay;
+                        if(stay == 'y') printf("\n");
+                    }
+
+                }while( (j == -1) && (stay == 'y') );
+
+                // If the input is aborted (stay = 'n'), the program returns to
+                // the main menu. Otherwise, execution continues normally after
+                // a valid ID is typed.
+
+                if(stay == 'y'){
+
+                    obra[j].Imprime(); // print data of corresponding item
+                    printf("\n");
+
+                    printf("New title: ");
+                    scanf("%s", aux_str);
+                    obra[j].AtualizaTitulo(aux_str);
+
+                    printf("New author: ");
+                    scanf("%s", aux_str);
+                    obra[j].AtualizaAutor(aux_str);
+
+                    printf("New number of copies: ");
+                    scanf("%d", &aux_int);
+                    obra[j].AtualizaNExemplares(aux_int);
+
+                    do{
+                        printf(" 1 - Book\n");
+                        printf(" 2 - Periodical\n");
+                        printf(" 3 - Thesis\n");
+                        printf("New type: ");
+                        scanf("%d", &aux_int);
+
+                        if( (aux_int < 1) || (aux_int > 3) ) // execution continues only if a valid value is typed
+                            printf("Invalid value.\n\n");
+
+                    }while( (aux_int < 1) || (aux_int > 3) );
+
+                    obra[j].AtualizaTipo(aux_int);
+
+                    printf("\nRegistry updated successfully.\n");
+                }
+            }
+            // Sets control variables back to default value
+            printf("\n");
+            j=-1;
+            stay = 'y';
+        }
+
+        // Lend item -----------------------------------------------------------------------
+
+        if (escolha == 5) { // items are lent only if there are any users and items registered
+
+            if(u == 0)
+                printf("No users registered.\n");
+            if(w == 0)
+                printf("No items registered.\n");
+
+            else{
+
+                printf("Lend\n\n");
+
+                do{
+                    reserva[r].setMatricula();
+
+                    // Verifies if user already exists in the system, searching for
+                    // their ID in the registered users vector.
+                    for(i=0; i<u; i++){
+                        if(usuario[i].getMatricula() == reserva[r].getMatricula())
+                            j = i;
+                    }
+                    // If the ID is not found, the option to type
+                    // another ID appears.
+                    if(j == -1){
+                        printf("\nID not registered.\n");
+                        printf("Input again? (y/n) ");
+                        cin >> stay;
+                        if(stay == 'y') printf("\n");
+                    }
+
+                }while( (j == -1) && (stay == 'y') );
+
+                // If the input is aborted (stay = 'n'), the program returns to
+                // the main menu. Otherwise, execution continues normally after
+                // a valid ID is typed.
+                // It is also verified if the user has reached the maximum number
+                // of items borrowed.
+
+                if( (stay == 'y') && usuario[j].VerificaMaxObras() ){
+
+                    do{
+                        reserva[r].setCodigo();
+
+                        // Verifies if item already exists in the system, searching for
+                        // its ID in the registered items vector.
+                        for(i=0; i<w; i++){
+                            if(obra[i].getCodigo() == reserva[r].getCodigo())
+                                k = i;
+                        }
+                        // If the ID is not found, the option to type
+                        // another ID appears.
+                        if(k == -1){
+                            printf("\nID not registered.\n");
+                            printf("Input again? (y/n) ");
+                            cin >> stay;
+                            if(stay == 'y') printf("\n");
+                        }
+
+                    }while( (k == -1) && (stay == 'y') );
+
+                    // If the input is aborted (stay = 'n'), the program returns to
+                    // the main menu and no changes are made. Otherwise, the borrowing
+                    // process proceeds.
+                    // It is also verified if there is a sufficient number of copies
+                    // available to lend.
+
+                    if( (stay == 'y') && obra[k].VerificaExemplares() ) {
+
+                        usuario[j].Emprestar(); // fills a borrowing slot from the user
+                        obra[k].Emprestar();    // fills an available copy slot from the item
+                        reserva[r].setDataEmprestimo();
+                        reserva[r].CalculaDevolucao(usuario[j].getTipo());
+                        printf("\nBorrowing completed successfully.\n");
+                        reserva[r].ImprimeDevolucao();
+                        r++;
+                    }
+                }
+            }
+            // Sets control variables back to default value
+            printf("\n");
+            j=-1;
+            k=-1;
+            stay = 'y';
+        }
+
+        // Renew item -----------------------------------------------------------------------
+
+        if (escolha == 6) {
+
+            if(r == 0)
+                printf("No item was borrowed.\n");
+
+            else{
+
+                printf("Renew\n\n");
+
+                do{
+                    printf("User ID: ");
+                    scanf("%d", &aux_int);
+
+                    // Verifies if the user has borrowed items, searching for
+                    // their ID in the reservations vector.
+                    for(i=0; i<r; i++){
+                        if(reserva[i].getMatricula() == aux_int)
+                            j = i; // changes default value of j
+                    }
+
+                    // If the user has not borrowed any item:
+                    if(j == -1){
+                        printf("\nUser has not borrowed items.\n");
+                        printf("Input again? (y/n) ");
+                        cin >> stay;
+                        if(stay == 'y') printf("\n");
+                    }
+
+                    // If the user ID is found in the reservations vector, a new search is conducted
+                    // in the users vector to obtain the corresponding index.
+                    else{
+                        for(i=0; i<u; i++){
+                            if(usuario[i].getMatricula() == aux_int)
+                                j = i;  // saves vector index for later accessing information regarding only the user class
+                        }
+                    }
+
+                }while( (j == -1) && (stay == 'y') );
+
+                // If the input is not aborted or a valid value is typed,
+                // execution continues.
+
+                if(stay == 'y'){
+
+                    do{
+                        printf("Item ID: ");
+                        scanf("%d", &aux_int);
+
+                        // Verifies if the item was borrowed, searching for its ID
+                        // in the reservations vector.
+                        for(i=0; i<r; i++){
+                            if(reserva[i].getCodigo() == aux_int)
+                                k = i; // save vector index where the item to be renewed was found
+                        }
+                        // If the ID is not found:
+                        if(k == -1){
+                            printf("\nItem was not borrowed.\n");
+                            printf("Input again? (y/n) ");
+                            cin >> stay;
+                            if(stay == 'y') printf("\n");
+                        }
+
+                    }while( (k == -1) && (stay == 'y') );
+
+                    // If the input is not aborted or a valid value is typed,
+                    // the borrowing is renewed and the new return date is printed.
+
+                    if(stay == 'y'){
+                        reserva[k].Renovar(usuario[j].getTipo());
+                        reserva[k].CalculaDevolucao(usuario[j].getTipo());
+                        printf("\nItem renewed successfully.\n");
+                        reserva[k].ImprimeDevolucao();
+                    }
+                }
+            }
+            // Sets control variables back to default value
+            printf("\n");
+            j=-1;
+            k=-1;
+            stay = 'y';
+        }
+
+        // Return item -----------------------------------------------------------------------
+
+        if (escolha == 7) {
+
+            if(r == 0)
+                printf("No item is borrowed.\n");
+
+            else{
+
+                printf("Return\n\n");
+
+                do{
+                    printf("Item ID: ");
+                    scanf("%d", &aux_int);
+
+                    // Verifies if the item was borrowed, searching for its ID
+                    // in the reservations vector.
+                    for(i=0; i<r; i++){
+                        if(reserva[i].getCodigo() == aux_int)
+                            k = i; // save vector index where the corresponding item is
+                    }
+                    // If the ID is not found:
+                    if(k == -1){
+                        printf("\nItem was not borrowed.\n");
+                        printf("Input again? (y/n) ");
+                        cin >> stay;
+                        if(stay == 'y') printf("\n");
+                    }
+
+                }while( (k == -1) && (stay == 'y') );
+
+                // If the input is not aborted or a valid value is typed, execution continues.
+                if(stay == 'y'){
+
+                    printf("Return date (dd/mm): ");
+                    scanf("%d/%d", &dia, &mes);
+
+                    // Searches users vector to obtain the corresponding user's index.
+                    // In order to do so, all user IDs are compared with the one associated
+                    // with the borrowed item.
+                    for(i=0; i<u; i++){
+                        if(usuario[i].getMatricula() == reserva[k].getMatricula())
+                            j = i; // save to later access information
+                    }
+
+                    reserva[k].CalculaDevolucao(usuario[j].getTipo());
+                    multa = reserva[k].CalculaMulta(dia, mes, usuario[j].getTipo()); // According to the difference between calculated
+                    printf("\nItem returned successfully.\n");                       // return date and the date when the user actually
+                    if(multa != 0)                                                   // returned their item.
+                        printf("Delay fine R$%.2f\n", multa);
+
+                    // When removing an item from the reservations list, the empty space in the vector is filled
+                    // by moving elements of higher index to a position immediately before them. Only then the
+                    // number of reservations will be decremented.
+                    for(i=k; i<r; i++)
+                        reserva[i] = reserva[i+1];
+                    r--;
+
+                    // Searches for the typed ID in the items vector to access information
+                    // belonging only to the item class.
+                    for(i=0; i<w; i++){
+                        if(obra[i].getCodigo() == aux_int)
+                            k = i;
+                    }
+
+                    usuario[j].Devolver(); // free a borrowing slot of that user
+                    obra[k].Devolver();    // free an available copies slot of that item
+                }
+
+            }
+            // Sets control variables back to default value
+            printf("\n");
+            j=-1;
+            k=-1;
+            stay = 'y';
+        }
+
+        // Print User's Borrowing List -----------------------------------------------------------------------
+
+        if(escolha == 8){
+
+            if(r == 0)
+                printf("No item is borrowed.\n");
+
+            else{
+
+                printf("Print user borrowing list\n\n");
+
+                do{
+                    printf("User ID: ");
+                    scanf("%d", &aux_int);
+
+                    // Verifies if the user has borrowed items, searching for their ID
+                    // in the reservations vector.
+                    for(i=0; i<r; i++){
+
+                        if(reserva[i].getMatricula() == aux_int){
+
+                            // Whenever the user ID is found, print data of the associated item. In order to do
+                            // that, the corresponding item's index in the items vector is obtained and used to
+                            // access information belonging only to the item class.
+
+                            for(j=0; j<w; j++){
+                                if(obra[j].getCodigo() == reserva[i].getCodigo())
+                                    k = j;
+                            }
+
+                            printf("\n");
+                            printf("Item ID: %d\n", reserva[i].getCodigo());
+                            printf("Title: %s\n", obra[k].getTitulo());
+                            printf("Author: %s\n", obra[k].getAutor());
+                            reserva[i].ImprimeEmprestimo();
+                            reserva[i].ImprimeDevolucao();
+                        }
+                    }
+
+                    // If the user ID is not found in the reservations vector:
+                    if(j == -1){
+                        printf("\nUser has not borrowed items.\n");
+                        printf("Input again? (y/n) ");
+                        cin >> stay;
+                        if(stay == 'y') printf("\n");
+                    }
+
+                }while( (j == -1) && (stay == 'y') );
+
+            }
+            // Sets control variables back to default value
+            printf("\n");
+            j=-1;
+            k=-1;
+            stay == 'y';
+        }
+
+        // Save Borrowing List -----------------------------------------------------------------------
+
+        if(escolha == 9){
+
+            arq_reserva = fopen ("reservation.bin", "wb");
+
+            for(i=0; i<r; i++)
+                fwrite(&reserva[i], sizeof(Reserva), 1, arq_reserva);
+
+            fclose(arq_reserva);
+            printf("Borrowing list saved successfully.\n\n");
+
+        }
+
+        // Save Item List -----------------------------------------------------------------------
+
+        if(escolha == 10){
+
+            arq_obras = fopen ("workslist.bin", "wb");
+
+            for(i=0; i<w; i++)
+                fwrite(&obra[i], sizeof(Obra), 1, arq_obras);
+
+            fclose(arq_obras);
+            printf("Item list saved successfully.\n\n");
+
+        }
+
+
+    }while (escolha != 11);
+
+
+    // The user file must also be updated for the system to work correctly
+
+    arq_usuarios = fopen ("userlist.bin", "wb");
+
+        for(i=0; i<u; i++)
+            fwrite(&usuario[i], sizeof(Usuario), 1, arq_usuarios);
+
+    fclose(arq_usuarios);
+
+    return 0;
+}
