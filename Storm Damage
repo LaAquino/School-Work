@@ -1,0 +1,139 @@
+// Laise Aquino, November 2015
+// Advanced Simulation exercise that estimates total expenses of an insurance company after a storm. For each policy 
+// holder, chances of them being affected and the damage size are randomly calculated. Probabilities for two cases 
+// are calculated: policy holders living near each other or far apart.
+
+package exercise2;
+
+import java.text.DecimalFormat;
+import java.text.DecimalFormatSymbols;
+import java.util.Locale;
+import java.util.Random;
+
+public class Exercise2 {
+    
+    private static Random rand = new Random();
+    private static DecimalFormat df = new DecimalFormat(".###", new DecimalFormatSymbols(Locale.US));
+    public static double[] totalCS;
+    public static double[] runs; 
+    
+    public static double[] generateOccurence(int n) {
+    // array corresponding to the policy holders, containing doubles,
+    // indicating the probability of them filing a claim
+        double[] occurence = new double[n];
+        for (int i = 0; i < occurence.length; i++)
+            occurence[i] = rand.nextDouble(); // prob. from 0 to 1
+        return occurence;
+    }
+    
+    public static double[] singleOccurence(int n) {
+    // array where the probability of occurence is the same,
+    // keeping the same format as before
+        double[] occurence = new double[n];
+        double chance = rand.nextDouble();
+        for (int i = 0; i < occurence.length; i++)
+            occurence[i] = chance;
+        return occurence;
+    }
+    
+    public static double[] generateDamage(int n, int min, int max) {
+    // array corresponding to the policy holders, containing doubles,
+    // indicating each claim's size
+        double[] damage = new double[n];
+        for (int i = 0; i < n; i++)
+            damage[i] = rand.nextInt((max - min)+1) + min; 
+            // inclusive range from min to max
+        return damage;
+    }
+    
+    public static double[] multiplyProb(int n, double[] dmg, double[] p) {
+    // array for combining claim values and their occurences    
+        double[] damage_prob = new double[n];
+        for (int i = 0; i< dmg.length; i++)
+            damage_prob[i] = dmg[i]*p[i];
+        return damage_prob;
+    }
+        
+    public static double getTotalSize(double[] claim) {
+    // returns total claim size of one run
+        double T = 0;
+        for (int i = 0; i < claim.length; i++) 
+            T = T + claim[i];
+        return T;
+    }
+      
+    public static void simTotalSizes(int n, int nruns, int min, int max) {
+        
+        double[] occ, s_occ, dmg;
+        double[] totalA = new double[nruns];
+        double[] totalB = new double[nruns];              
+        
+        double sumXA = 0;  // sum of outcomes and
+        double sumX2A = 0; // their squares for
+        double sumXB = 0;  // both cases: policy holders
+        double sumX2B = 0; // apart (A) or together (B)
+        
+        for (int i = 0; i < totalA.length; i++) {
+            totalA[i] = 0;
+            totalB[i] = 0;
+        }
+        
+        for (int i = 0; i < nruns; i++) {
+            
+            occ = Exercise2.generateOccurence(n); // gen. each prob. of occurence - case A
+            s_occ = Exercise2.singleOccurence(n); // gen. one single probability - case B
+            dmg = Exercise2.generateDamage(n,min,max); // gen. claim values for both
+          
+            totalA[i] = getTotalSize(Exercise2.multiplyProb(n, dmg, occ));
+            sumXA = sumXA + totalA[i]; // accumulate total claims on each run
+            sumX2A = sumX2A + (totalA[i]*totalA[i]); // and their squares
+            
+            totalB[i] = getTotalSize(Exercise2.multiplyProb(n, dmg, s_occ));
+            sumXB = sumXB + totalB[i];
+            sumX2B = sumX2B + (totalB[i]*totalB[i]);    
+            
+        }
+        
+        double EX = sumXA/nruns;                    // mean
+        double EX2 = sumX2A/nruns; 
+        double var = EX2 - EX * EX;                 // variance   
+        double z = 1.96;                            // 97.5 percentile point
+        double lbA = EX - z * Math.sqrt(var/nruns); // lower confidence limit
+        double ubA = EX + z * Math.sqrt(var/nruns); // upper confidence limit
+      
+        System.out.println("Case A: Policy holders live apart");
+        System.out.println("mean = " + df.format(EX));
+        System.out.println("deviation = " + df.format(Math.sqrt(var)));
+        System.out.println("95% confidence interval: [" + df.format(lbA)+", "+ df.format(ubA)+"]");
+        
+        EX = sumXB/nruns; 
+        EX2 = sumX2B/nruns; 
+        var = EX2 - EX * EX;  
+        z = 1.96; 
+        double lbB = EX - z * Math.sqrt(var/nruns);
+        double ubB = EX + z * Math.sqrt(var/nruns);
+        
+        System.out.println("\nCase B: Policy holders live close to each other");
+        System.out.println("mean = " + df.format(EX));
+        System.out.println("deviation = " + df.format(Math.sqrt(var)));
+        System.out.println("95% confidence interval: [" + df.format(lbB)+", "+ df.format(ubB)+"]");        
+        
+        totalCS = totalA;
+        runs = new double[nruns];
+        for (int i=0; i<nruns; i++)
+            runs[i] = i;
+    }
+    
+    public static void main(String[] arg) {
+    
+    int nruns = 1000; // number of runs
+    int n = 20; // group size
+    int min = 100; // min and max claim sizes
+    int max = 1000;
+    
+    simTotalSizes(n, nruns, min, max);
+    
+    
+  }
+    
+}
