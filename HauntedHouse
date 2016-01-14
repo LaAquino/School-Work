@@ -1,0 +1,672 @@
+// Guilherme Nishina, Laise Aquino and Nicholas Fujimoto - June 2015 
+// Computer Graphics final project
+// Our task was to develop a game using OpenGL. My main contribution was 
+// implementing movement functions, located between lines 250 and 430.
+
+import br.usp.icmc.vicg.gl.core.Light;
+import br.usp.icmc.vicg.gl.jwavefront.JWavefrontObject;
+import br.usp.icmc.vicg.gl.matrix.Matrix4;
+
+import java.awt.Frame;
+import java.awt.event.WindowAdapter;
+import java.awt.event.WindowEvent;
+
+import javax.media.opengl.GL;
+import javax.media.opengl.GL3;
+import javax.media.opengl.GLAutoDrawable;
+import javax.media.opengl.GLCapabilities;
+import javax.media.opengl.GLEventListener;
+import javax.media.opengl.GLProfile;
+import javax.media.opengl.awt.GLCanvas;
+
+import br.usp.icmc.vicg.gl.util.Shader;
+import br.usp.icmc.vicg.gl.util.ShaderFactory;
+import br.usp.icmc.vicg.gl.util.ShaderFactory.ShaderType;
+
+import com.jogamp.opengl.util.AnimatorBase;
+import com.jogamp.opengl.util.FPSAnimator;
+
+import java.awt.event.KeyAdapter;
+import java.awt.event.KeyEvent;
+import java.io.File;
+import java.io.IOException;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+import static javax.media.opengl.GL.GL_BLEND;
+import static javax.media.opengl.GL.GL_ONE_MINUS_SRC_ALPHA;
+import static javax.media.opengl.GL.GL_SRC_ALPHA;
+
+public class CasaAssombrada extends KeyAdapter implements GLEventListener {
+
+  private final Shader shader; // Gerenciador dos shaders
+  private final Matrix4 modelMatrix;
+  private final Matrix4 projectionMatrix;
+  private final Matrix4 viewMatrix;
+  private final JWavefrontObject model;
+  private final JWavefrontObject modelMansion;
+  private final JWavefrontObject modelTransit;
+  private final Light light;
+  //private float alpha;
+  private float beta;
+  private float tempBeta;
+  private float delta;
+  private float gama;
+  private float x, y, z, speed;
+  private boolean isTransp;
+  private double angle;
+  private float aux_cam;//auxiliar na rotacao da camera
+  
+  GL3 gl;
+  private int flag;
+  private int count;
+  private int inputvec[];
+  private boolean isGoingUp;
+  
+  public CasaAssombrada() {
+    // Carrega os shaders
+    shader = ShaderFactory.getInstance(ShaderType.COMPLETE_SHADER);
+    modelMatrix = new Matrix4();
+    projectionMatrix = new Matrix4();
+    viewMatrix = new Matrix4();
+    flag = 1;
+    
+    isGoingUp = true;
+    inputvec = new int[12];
+    for(count=0;count<12;count++)
+        inputvec[count] = 0;
+    count = 0;
+    model = new JWavefrontObject (new File ("./Models/Opaque/boo_party1.obj"));
+    modelMansion = new JWavefrontObject (new File ("./Models/Mansion/mansion.obj"));
+    modelTransit = new JWavefrontObject (new File ("./Models/Transparent/boo_t.obj"));
+    light = new Light();
+
+    beta = 0;
+    tempBeta = 0;
+    delta = 2;
+    gama = 0;
+    angle = 90;
+    isTransp = false;
+    aux_cam = 0;
+    
+  
+    x = 0;
+    y = 2.1f;
+    z = 0;
+    
+  }
+  
+  @Override
+  public void init(GLAutoDrawable drawable) {
+    // Get pipeline
+    GL3 gl = drawable.getGL().getGL3();
+
+    // Print OpenGL version
+    //System.out.println("OpenGL Version: " + gl.glGetString(GL.GL_VERSION) + "\n");
+
+    gl.glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
+    gl.glClearDepth(1.0f);
+
+    // If enabled, do depth comparisons and update the depth buffer. 
+    gl.glEnable(GL.GL_DEPTH_TEST);
+    //  specify whether front- or back-facing polygons can be culled
+    gl.glEnable(GL.GL_CULL_FACE);
+    
+    //inicializa os shaders
+    shader.init(gl);
+    
+    //ativa os shaders
+    shader.bind();
+    
+    //inicializa a matrix Model and Projection
+    modelMatrix.init(gl, shader.getUniformLocation("u_modelMatrix"));
+    projectionMatrix.init(gl, shader.getUniformLocation("u_projectionMatrix"));
+    viewMatrix.init(gl, shader.getUniformLocation("u_viewMatrix"));
+    
+    projectionMatrix.loadIdentity();
+
+    projectionMatrix.perspective(45, 1f, 0.5f, 10*delta);
+    projectionMatrix.bind();
+
+    delta = 0.3f;
+    
+    viewMatrix.loadIdentity();
+    viewMatrix.lookAt(
+            0.0f, 0.0f, 1.0f, 
+            0, y, 0, 
+            0.0f, 1.0f, 0);
+    viewMatrix.bind();
+   
+    try {
+      //init the model
+      model.init(gl, shader);
+      model.unitize();
+      model.dump();
+      
+      modelMansion.init(gl, shader);
+      modelMansion.unitize();
+      modelMansion.dump();
+      
+      modelTransit.init(gl, shader);
+      modelTransit.unitize();
+      modelTransit.dump();
+    } catch (IOException ex) {
+      Logger.getLogger(CasaAssombrada.class.getName()).log(Level.SEVERE, null, ex);
+    }
+
+    //init the light
+    light.setPosition(new float[]{0f, -0.9f, 0f, 1.0f});
+    
+    light.init(gl, shader);
+  }
+
+  @Override
+  public void display(GLAutoDrawable drawable) {
+    // Recupera o pipeline
+    GL3 gl = drawable.getGL().getGL3();
+
+    // Limpa o frame buffer com a cor definida
+    gl.glClear(GL3.GL_COLOR_BUFFER_BIT | GL3.GL_DEPTH_BUFFER_BIT);
+    
+    if (speed > 0)
+    {
+    	viewMatrix.loadIdentity();
+        viewMatrix.lookAt(
+        	x+4.8f, y-1.5f, z-4.9f, 
+                x-4.2f, y, z+5.5f, 
+                0f, 1.0f, 0f);
+        viewMatrix.rotate(beta*(float)(180/Math.PI), 0f, -1.0f, 0f);
+        viewMatrix.rotate(gama*(float)(180/Math.PI), -1.0f, 0f, 0f);
+        viewMatrix.bind();
+        shoot();
+    }
+    else
+    {
+    	viewMatrix.loadIdentity();
+        viewMatrix.lookAt(
+                x+6.0f, y+4.5f, z-5.9f, //from 
+                0, y, 0,                //to
+                0f, 1.0f, 0f);          //up
+        viewMatrix.rotate(beta*(float)(180/Math.PI), 0f, -1.0f, 0f);
+        viewMatrix.rotate(gama*(float)(180/Math.PI), -1.0f, 0f, 0f);
+        viewMatrix.bind();
+    }
+    
+    modelMatrix.loadIdentity();
+    modelMatrix.rotate(gama*(float)(180/Math.PI), 1.0f, 0f, 0f);
+    modelMatrix.rotate(beta*(float)(180/Math.PI), 0, 1.0f, 0);
+    modelMatrix.translate(x, y, z);
+    
+    modelMatrix.scale(20*delta, 20*delta, 20*delta);
+    modelMatrix.bind();
+    modelMansion.draw();
+    
+    Breathing();
+    checkInput();
+    
+// Transparency Test
+    
+if (isTransp == true) {
+    modelMatrix.loadIdentity();
+    modelMatrix.rotate(180, 0, 1.0f, 0);
+    modelMatrix.scale(delta,  delta,  delta);
+    gl.glEnable(GL_BLEND);
+    gl.glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    modelMatrix.bind();
+        if(flag == 1){
+        modelTransit.draw();
+        flag = 0;
+        }
+    modelTransit.draw();
+    gl.glDisable(GL_BLEND);
+}
+else {
+    modelMatrix.loadIdentity();
+    modelMatrix.rotate(180, 0, 1.0f, 0);
+    modelMatrix.scale(delta,  delta,  delta);
+    modelMatrix.bind();
+    model.draw();
+}
+
+    
+    light.setAmbientColor(new float[]{1.0f,1.0f, 1.0f, 1.0f});
+    light.setDiffuseColor(new float[]{0.5f, 0.5f, 0.5f, 1.0f});
+    light.setSpecularColor(new float[]{0.4f, 0.4f, 0.4f, 1.0f});
+    
+    // Força execução das operações declaradas
+    gl.glFlush();
+  }
+
+  @Override
+  public void reshape(GLAutoDrawable drawable, int x, int y, int width, int height) {
+  }
+
+  @Override
+  public void dispose(GLAutoDrawable drawable) {
+    model.dispose();
+  }
+
+/* 
+  Applying movement simply by checking keyPressed only process one
+  key at a time, resulting in an unnatural motion. Our method also
+  uses keyReleased to manage multiple key presses: every key is
+  mapped to a vector position, which becomes 1 whenever the key
+  is pressed and 0 when it is released. This vector is checked
+  every frame to calculate movement, accepting various active
+  keys simultaneously.
+*/
+  @Override
+ public void keyPressed(KeyEvent e) {
+
+   switch (e.getKeyCode()) {
+
+   // Camera commands
+   case KeyEvent.VK_I: //zoom
+       inputvec[0]=1;
+     break;
+   case KeyEvent.VK_O: 
+       inputvec[1]=1;
+     break;
+
+   case KeyEvent.VK_PAGE_UP: //up-down movement
+       inputvec[2]=1;
+     break;
+   case KeyEvent.VK_PAGE_DOWN: 
+       inputvec[3]=1;
+     break;
+   case KeyEvent.VK_LEFT: //y axis rotation
+     inputvec[4]=1;
+     break;
+   case KeyEvent.VK_RIGHT:
+     inputvec[5]=1;
+     break;
+      
+   // Boo Commands
+   case KeyEvent.VK_W: //forward-backward movement
+       inputvec[6]=1;
+     break;
+   case KeyEvent.VK_S: 
+       inputvec[7]=1;
+     break;
+   case KeyEvent.VK_A: //left-right rotation
+     inputvec[8]=1;
+     break;
+   case KeyEvent.VK_D: 
+     inputvec[9]=1;
+     break;
+   case KeyEvent.VK_SHIFT: //becomes transparent
+     SwitchMode();
+     break;
+   case KeyEvent.VK_SPACE: //shoot
+     inputvec[11]=1;
+     break;
+      
+   }
+ }
+
+   @Override
+ public void keyReleased(KeyEvent e) {
+
+   switch (e.getKeyCode()) {
+
+   // Same as before
+   case KeyEvent.VK_I:
+       inputvec[0]=0;
+     break;
+   case KeyEvent.VK_O:
+       inputvec[1]=0;
+     break;
+   case KeyEvent.VK_PAGE_UP: 
+       inputvec[2]=0;
+     break;
+   case KeyEvent.VK_PAGE_DOWN: 
+       inputvec[3]=0;
+     break;
+   case KeyEvent.VK_LEFT: 
+     inputvec[4]=0;
+     break;
+   case KeyEvent.VK_RIGHT:
+     inputvec[5]=0;
+     break;
+   case KeyEvent.VK_W: 
+       inputvec[6]=0;
+     break;
+   case KeyEvent.VK_S: 
+       inputvec[7]=0;
+     break;
+   case KeyEvent.VK_A: 
+     inputvec[8]=0;
+     break;
+   case KeyEvent.VK_D: 
+     inputvec[9]=0;
+     break;
+   case KeyEvent.VK_SHIFT:
+     inputvec[10]=0;
+     break;
+   case KeyEvent.VK_SPACE:
+     inputvec[11]=0;
+     break;  
+   }
+ }
+
+  public void checkInput() { // movement takes place according to pressed keys
+     
+     if(inputvec[0] == 1)
+       delta = delta * 0.809f;
+     if(inputvec[1] == 1)
+       delta = delta * 1.1f;
+     if(inputvec[2] == 1)
+     {
+    	 gama = (float)(Math.PI/2.0);
+    	 tempBeta = beta;
+    	 beta = 0;
+    	 move(0.5f);
+    	 gama = 0f;
+    	 beta = tempBeta;
+     }
+     if(inputvec[3] == 1)
+     {
+    	 gama = (float)(-Math.PI/2.0);
+    	 tempBeta = beta;
+    	 beta = 0;
+    	 move(0.5f);
+    	 gama = 0f;
+    	 beta = tempBeta;	 
+     }
+     if(inputvec[4] == 1)
+       aux_cam = aux_cam - 0.1f;
+     if(inputvec[5] == 1)
+       aux_cam = aux_cam + 0.1f;    
+     if(inputvec[6] == 1)
+       move(-1.0f);
+     if(inputvec[7] == 1)
+       move(1.0f);
+     if(inputvec[8] == 1){
+       beta = beta - 0.1f;
+       angle = angle - 0.1;
+     }
+     if(inputvec[9] == 1){
+       beta = beta + 0.1f;
+       angle = angle + 0.1;
+     }
+     if(inputvec[11] == 1)  
+       speed = 5.0f;
+     
+ }
+  
+ public void SwitchMode() {
+     
+     if(isTransp == true) 
+        isTransp = false;  // boo becomes opaque   
+     else isTransp = true; // boo becomes transparent
+    
+}
+
+ public void Breathing() { // slow up and down movement to simulate breathing
+    
+     if(isGoingUp) {                    
+    	 gama = (float)(Math.PI/2.0);   
+    	 tempBeta = beta; // moving variables updated so 
+    	 beta = 0;        // boo starts going down
+    	 move(0.03f);
+    	 gama = 0f;
+    	 beta = tempBeta;
+         count ++;
+         if(count == 60) {
+             isGoingUp = false;
+             count = 0;
+         }
+     } else {
+    	 gama = (float)(-Math.PI/2.0);
+    	 tempBeta = beta; // moving variables updated so
+    	 beta = 0;        // boo starts going up
+    	 move(0.03f);
+    	 gama = 0f;
+    	 beta = tempBeta;
+         count ++;
+         if(count == 60) {
+             isGoingUp = true;
+             count = 0;
+         }
+     }      
+ }
+
+  public static void main(String[] args) {
+	    // Get GL3 profile (to work with OpenGL 4.0)
+	    GLProfile profile = GLProfile.get(GLProfile.GL3);
+	 
+	    // Configurations
+	    GLCapabilities glcaps = new GLCapabilities(profile);
+	    glcaps.setDoubleBuffered(true);
+	    glcaps.setHardwareAccelerated(true);
+	 
+	    // Create canvas
+	    GLCanvas glCanvas = new GLCanvas(glcaps);
+	 
+	    // Add listener to panel
+	    CasaAssombrada listener = new CasaAssombrada();
+	   
+	    glCanvas.addGLEventListener(listener);
+	    glCanvas.addKeyListener(listener);
+	 
+	    Frame frame = new Frame("BOO");
+	    frame.setSize(600, 600);
+	    frame.add(glCanvas);
+	    frame.addKeyListener(listener);
+	    final AnimatorBase animator = new FPSAnimator(glCanvas, 60);
+	 
+	    frame.addWindowListener(new WindowAdapter() {
+	      @Override
+	      public void windowClosing(WindowEvent e) {
+	        new Thread(new Runnable() {
+	          @Override
+	          public void run() {
+	            animator.stop();
+	            System.exit(0);
+	          }
+	        }).start();
+	      }
+	    });
+	    frame.setVisible(true);
+	    animator.start();
+	  }
+  
+  private void move(float dist)
+  {
+	  	float newX, newY, newZ, incX, incY, incZ;
+	  	incX = (float)(dist*Math.sin(beta)/10.0f);
+	  	incY = (float)(-dist*Math.sin(gama))/10.0f;
+	  	incZ = (float)(-dist*Math.cos(gama)*Math.cos(beta)/10.0f);
+	  	
+	  	newX = x + incX;
+	  	newY = y + incY;
+	  	newZ = z + incZ;
+	    
+	  	// escada central
+	  	if (newX < 3.5 && newX > -0.8)
+	  	{
+	  		if (!isTransp)
+	  		{
+	  		// corrimao
+		  		if ((newY-2.15) > - 0.55*newX)
+		  		{	  			
+		  			if ((z < -0.6 && z > -0.9) || (z < 1.5 && z > 1.2))
+		  			{
+		  				incY = 0;
+		  			}
+		  			else if ((newZ < -0.6 && newZ > -0.9) || (newZ < 1.5 && newZ > 1.2))
+		  			{
+		  				incZ = 0;
+		  			}
+		  		}
+	  		}
+	  		if ((newY-2.75) > - 0.55*newX)
+	  		{
+	  			if (z < 1.7 && z > -1.1)
+	  			{
+		  			incY = -0.05f;
+	  			}
+	  			else if (newZ < 1.7 && newZ > -1.1)
+	  			{
+	  				incZ = 0;
+	  			}
+	  		}
+	  	}
+	 // escada direita
+	  	if (newZ < 3.3 && newZ > 1.4)
+	  	{
+	  		// corrimao
+	  		if (!isTransp)
+	  		{
+		  		if ((newY-1.05) > - 0.45*newX)
+		  		{	  			
+		  			if (/*(x < 5.0 && x > 4.7) ||*/ (x < 3.7 && x > 3.2))
+		  			{
+		  				incY = 0;
+		  			}
+		  			else if ((newX < 5.0 && newX > 4.7) || (newX < 3.7 && newX > 3.2))
+		  			{
+		  				incX = 0;
+		  			}
+		  		}
+	  		}
+	  		if ((newY-1.65) > - 0.45*newZ)
+	  		{
+	  			if (x < 5.0 && x > 3.2)
+	  			{
+		  			incY = -0.12f;
+	  			}
+	  			else if (newX < 5.0 && newX > 3.2)
+	  			{
+	  				incX = 0;
+	  			}
+	  		}
+	  	}
+	 // escada esquerda
+	  	if (newZ < -0.8 && newZ > -2.75)
+	  	{
+	  		// corrimao
+	  		if (!isTransp)
+	  		{
+		  		if ((newY-0.75) > - 0.45*newX)
+		  		{	  			
+		  			if (x < 3.7 && x > 3.2)
+		  			{
+		  				incY = 0;
+		  			}
+		  			else if ((newX < 5.0 && newX > 4.7) || (newX < 3.7 && newX > 3.2))
+		  			{
+		  				incX = 0;
+		  			}
+		  		}
+	  		}
+	  		if ((newY-1.35) > 0.45*newZ)
+	  		{
+	  			if (x < 5.0 && x > 3.2)
+	  			{
+		  			incY = -0.12f;
+	  			}
+	  			else if (newX < 5.0 && newX > 3.2)
+	  			{
+	  				incX = 0;
+	  			}
+	  		}
+	  	}
+	  	
+	  	// 2º andar
+  		if ((newY < 2.9 && newY > 1.0) && (x < 5.0 && x > 3.2) && (z < 1.5 && z > -0.9)) incY = 0;
+  		if ((newZ < 1.5 && newZ > -0.9) && (y < 2.9 && y > 1.0) && (x < 5.0 && x > 3.2)) incZ = 0;
+  		if ((newX < 5.0 && newX > 3.2) && (z < 1.5 && z > -0.9) && (y < 2.9 && y > 1.0)) incX = 0;
+  		
+  		// Colisoes com corrimao
+  		if (!isTransp)
+  		{
+  	  		if ((newY < 2.9 && newY > 0.5) && (x < 3.7 && x > 3.2) && (z < 1.5 && z > 1.2)) incY = 0;
+  	  		if ((newZ < 1.5 && newZ > 1.2) && (y < 2.9 && y > 0.5) && (x < 3.7 && x > 3.2)) incZ = 0;
+  	  		if ((newX < 3.7 && newX > 3.2) && (z < 1.5 && z > 1.2) && (y < 2.9 && y > 0.5)) incX = 0;
+  	  		
+  	  		if ((newY < 2.9 && newY > 0.5) && (x < 3.7 && x > 3.2) && (z < -0.6 && z > -0.9)) incY = 0;
+  	  		if ((newZ < -0.6 && newZ > -0.9) && (y < 2.9 && y > 0.5) && (x < 3.7 && x > 3.2)) incZ = 0;
+  	  		if ((newX < 3.7 && newX > 3.2) && (z < -0.6 && z > -0.9) && (y < 2.9 && y > 0.5)) incX = 0;
+  	  		
+  	  		if ((newY < 2.9 && newY > -0.3) && (x < 3.7 && x > 3.2) && (z < 4.2 && z > 3.2)) incY = 0;
+  	  		if ((newZ < 4.2 && newZ > 3.2) && (y < 2.9 && y > -0.3) && (x < 3.7 && x > 3.2)) incZ = 0;
+  	  		if ((newX < 3.7 && newX > 3.2) && (z < 4.2 && z > 3.2) && (y < 2.9 && y > -0.3)) incX = 0;
+  	  		
+  	  		if ((newY < 2.9 && newY > -0.3) && (x < 3.7 && x > 3.2) && (z < -2.6 && z > -4.2)) incY = 0;
+  	  		if ((newZ < -2.6 && newZ > -4.2) && (y < 2.9 && y > -0.3) && (x < 3.7 && x > 3.2)) incZ = 0;
+  	  		if ((newX < 3.7 && newX > 3.2) && (z < -2.6 && z > -4.2) && (y < 2.9 && y > -0.3)) incX = 0;
+  		}
+	  	// 2º e 3º andares pelo eixo y
+	  	if (x < 5.0 && x > 3.2)
+	  	{
+	  		if (newY < 2.9 && newY > 0.2)
+	  		{
+	  			// 3º andar - direita
+	  			if (z < 5.5 && z> 3.2)
+	  			{
+	  				incY = 0;
+	  			}
+	  			// 3º andar - esquerda
+	  			else if (z < -2.65 && z > -5.0)
+	  			{
+	  				incY = 0;
+	  			}
+	  		}
+	  	}
+	  	// 2º e 3º andar pelo eixo x
+	  	else if (newX < 5.0 && newX > 3.2)
+	  	{	  	
+	  		if (y < 2.9 && y > 0.2)
+	  		{
+	  			if ((z < 5.5 && z> 3.2) || (z < -2.65 && z > -5.0))
+	  			{
+	  				incX = 0;
+	  			}
+	  		}
+	  	}
+
+	  	// limites da mansão
+	  	if (newX < 5.0 && newX > -4.5)
+	    	x += incX;
+	    if (newY < 2.9 && newY > -2.8)
+	    	y += incY;
+	    if (newZ < 5.7 && newZ > -4.7)
+	    	z += incZ;
+  }
+
+	private void shoot()
+	{
+	              float newX, newY, newZ;
+	             
+	              if
+	              (speed < 0) return;
+	             
+	              newX = x + (float)(-speed*Math.sin(beta)/10.0f);
+	              newY = y + (float)(speed*Math.sin(gama))/10.0f;
+	              newZ = z + (float)(speed*Math.cos(gama)*Math.cos(beta)/10.0f);
+	          if (newX < 5.0 && newX > -4.5)
+	              x = x + (float)(-speed*Math.sin(beta)/10.0f);
+	          else
+	      {
+	              beta += Math.PI;
+	              speed -= 0.1;
+	      }
+	          if (newY < 2.9 && newY > -2.8)
+	              y = y + (float)(speed*Math.sin(gama))/10.0f;
+	          else
+	          {
+	              gama += Math.PI;
+	              speed -= 0.1;
+	          }
+	          if (newZ < 5.5 && newZ > -5.0)
+	              z = z + (float)(speed*Math.cos(gama)*Math.cos(beta)/10.0f);
+	          else
+	          {
+	              speed -= 0.1;
+	              beta += Math.PI;
+	              z = z + (float)(speed*Math.cos(gama)*Math.cos(beta)/10.0f);
+	          }
+	          speed -= 0.01;
+	}
+
+}
