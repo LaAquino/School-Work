@@ -1,5 +1,5 @@
 // Laise Aquino, April 2015
-// Created as part of an Operating Systems course
+// Basic Linux shell created as part of an Operating Systems course
 
 #include <stdio.h>
 #include <string.h>
